@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>API Schema Probe</title>
+  <style>
+    body { font-family: monospace; background: #0f0f0f; color: #e0e0e0; padding: 24px; }
+    h1 { color: #7dd3fc; margin-bottom: 4px; }
+    p { color: #9ca3af; margin-bottom: 16px; }
+    pre { background: #1a1a1a; padding: 16px; border-radius: 8px; overflow: auto; font-size: 13px; line-height: 1.6; border: 1px solid #333; }
+    .label { color: #86efac; font-weight: bold; margin-top: 20px; display: block; }
+    .error { color: #f87171; }
+    .badge { display: inline-block; background: #1e3a5f; color: #7dd3fc; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin: 2px; }
+  </style>
+</head>
+<body>
+  <h1>SheetNinja API Probe</h1>
+  <p>Open this file in your browser. It will fetch the API and log the raw schema here.</p>
+
+  <div id="output"><em style="color:#6b7280">Fetching...</em></div>
+
+  <script>
+    const API_URL = 'https://api.sheetninja.io/919bcd7c06dc4a18b9804dfa255046e8/personalizationSkuList26Full/sheet1';
+
+    async function probe() {
+      const out = document.getElementById('output');
+      try {
+        // --- Page 1 ---
+        const res = await fetch(`${API_URL}?page=1&pageSize=5`);
+        const data = await res.json();
+
+        // Top-level keys
+        const topKeys = Object.keys(data);
+        const rows = data.data ?? data.rows ?? data.results ?? (Array.isArray(data) ? data : null);
+
+        let html = '';
+
+        // 1. Envelope structure
+        html += `<span class="label">1. Top-level envelope keys:</span>`;
+        html += `<pre>${JSON.stringify(topKeys, null, 2)}</pre>`;
+
+        // 2. Pagination fields
+        const paginationFields = {};
+        topKeys.forEach(k => {
+          if (typeof data[k] !== 'object' || Array.isArray(data[k])) {
+            if (!Array.isArray(data[k])) paginationFields[k] = data[k];
+          }
+        });
+        html += `<span class="label">2. Pagination / meta fields (non-array values):</span>`;
+        html += `<pre>${JSON.stringify(paginationFields, null, 2)}</pre>`;
+
+        // 3. Column headers
+        if (rows && rows.length > 0) {
+          const cols = Object.keys(rows[0]);
+          html += `<span class="label">3. Column headers (${cols.length} columns):</span><pre>`;
+          cols.forEach(c => {
+            html += `<span class="badge">${c}</span> `;
+          });
+          html += `</pre>`;
+
+          // 4. First 3 rows raw
+          html += `<span class="label">4. First 3 rows (raw):</span>`;
+          html += `<pre>${JSON.stringify(rows.slice(0, 3), null, 2)}</pre>`;
+
+          // 5. Column type analysis
+          html += `<span class="label">5. Column value samples + types:</span><pre>`;
+          cols.forEach(c => {
+            const samples = rows.map(r => r[c]).filter(v => v !== null && v !== undefined && v !== '');
+            const types = [...new Set(samples.map(v => typeof v))];
+            const preview = samples.slice(0, 3).map(v => JSON.stringify(v)).join(', ');
+            html += `${c.padEnd(35)} [${types.join('/')}]  e.g. ${preview}\n`;
+          });
+          html += `</pre>`;
+
+          // 6. Numeric column analysis (potential qty fields)
+          html += `<span class="label">6. Numeric / qty-like columns:</span><pre>`;
+          cols.forEach(c => {
+            const vals = rows.map(r => r[c]);
+            const numericCount = vals.filter(v => v !== '' && v !== null && !isNaN(Number(v))).length;
+            if (numericCount > 0) {
+              html += `${c} — ${numericCount}/${vals.length} numeric values, samples: ${vals.slice(0,3).join(', ')}\n`;
+            }
+          });
+          html += `</pre>`;
+        } else {
+          html += `<span class="label error">Could not find rows array. Full response:</span>`;
+          html += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+        }
+
+        // 7. Full raw response
+        html += `<span class="label">7. Full raw response (page 1, 5 rows):</span>`;
+        html += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+
+        out.innerHTML = html;
+      } catch (err) {
+        out.innerHTML = `<pre class="error">Error: ${err.message}\n\nCheck CORS or network issues.</pre>`;
+        console.error(err);
+      }
+    }
+
+    probe();
+  </script>
+</body>
+</html>
